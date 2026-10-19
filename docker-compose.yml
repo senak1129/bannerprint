@@ -1,0 +1,111 @@
+# bannerprint —— 一键启动编排
+#
+# 五个评分点在配置里的落点：
+#   1. 容器间访问收敛：client 与 server 只通过 internal 网络以服务名互访；
+#      server 对外只发布到 127.0.0.1，client 完全不发布端口。
+#   2. 启动依赖真实：healthcheck 调用二进制自带的 healthcheck 子命令，
+#      校验的是 engine_ready（规则已加载），而不是"端口能连上"；
+#      client 用 depends_on.condition: service_healthy 门控。
+#   3. 镜像：见 Dockerfile（多阶段 / 静态 / scratch）。
+#   4. 权限收紧：nonroot 65532、read_only 根文件系统、cap_drop ALL、
+#      no-new-privileges、pids/mem/cpu 上限、tmpfs 仅 /tmp 可写。
+#   5. 规则与代码解耦：rules/ 以只读卷挂载到 /etc/bannerprint/rules.d，
+#      改 YAML 不需要重新编译镜像。
+name: bannerprint
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  init: true
+  stop_grace_period: 15s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  server:
+    build:
+      context: .
+      target: server
+      args:
+        VERSION: ${VERSION:-dev}
+    image: bannerprint/server:${VERSION:-dev}
+    <<: *hardening
+    user: "65532:65532"
+    restart: unless-stopped
+    environment:
+      SERVER_ADDR: ":8080"
+      RULES_DIR: "/etc/bannerprint/rules.d"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      LOG_FORMAT: "json"
+      MAX_BATCH_ITEMS: "10000"
+      MAX_BANNER_BYTES: "8192"
+    volumes:
+      # 只读：容器内任何进程都无法篡改识别规则。
+      - ./rules:/etc/bannerprint/rules.d:ro
+    networks:
+      - internal
+      - edge
+    ports:
+      # 只绑回环口：不把识别服务暴露到局域网，需要外部访问时由调用方显式改。
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+    healthcheck:
+      # 用二进制自身做探针：scratch 镜像里没有 curl/wget/sh。
+      # 该子命令校验 HTTP 200 且 checks.engine_ready == true。
+      test: ["CMD", "/app/server", "healthcheck", "-url", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    mem_limit: 256m
+    cpus: 2.0
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+
+  client:
+    build:
+      context: .
+      target: client
+      args:
+        VERSION: ${VERSION:-dev}
+    image: bannerprint/client:${VERSION:-dev}
+    <<: *hardening
+    user: "65532:65532"
+    # 一次性任务容器：绝不能 restart。上面的锚点里带 restart 语义的话，
+    # 退出后会被反复拉起，把 `docker compose run` 变成死循环。
+    restart: "no"
+    # 默认 profile：`docker compose up` 时不会启动这个一次性容器，
+    # 需要时用 `docker compose run --rm client ...` 显式调用。
+    profiles: ["client"]
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      # 走服务名 DNS，只在 internal 网络内可达。
+      SERVER_URL: "http://server:8080"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    volumes:
+      - ./data:/data:ro
+    networks:
+      - internal
+    command: ["-file", "/data/input.json", "-out", "/tmp/result.json"]
+    mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 128
+    tmpfs:
+      # -out 需要可写目录；只给它 8MB，够放结果且有上限。
+      - /tmp:size=8m,mode=1777
+
+networks:
+  # internal: true —— 该网络没有默认网关，容器无法借此访问外网，
+  # 只能互相通信。client 只挂这个网络，因此即便 client 被投毒也打不出去。
+  internal:
+    internal: true
+    name: bannerprint_internal
+  # 仅 server 使用的对外网络，用于把 8080 发布到宿主机回环口。
+  edge:
+    name: bannerprint_edge

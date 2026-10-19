@@ -1,0 +1,24 @@
+# TLS 指纹规则（扩展能力，可用 ENABLE_TLS_DETECT=0 关闭）
+#
+# 输入形如 16 03 01 00 A5 ... 的 TLS record 头。Parser 已确认协议语法，
+# 这里只给出协议归属与置信度：没有完整 ServerHello，无法可靠判定产品与版本，
+# 因此 product/version 一律留空，不臆测。
+#
+# 置信度 0.60 的语义：只识别到「协议层特征」，未达到「产品+版本」的证据强度。
+
+version: 1
+protocol: TLS
+
+rules:
+  - id: tls.handshake_record
+    priority: 50
+    match:
+      source: field
+      field: tls.record
+      regex: '^handshake$'
+    fields:
+      product: ''
+      version: ''
+      os_hint: ''
+    confidence:
+      base: 0.60

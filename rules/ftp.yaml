@@ -1,0 +1,80 @@
+# FTP 指纹规则
+#
+# 判定链路：Parser 确认「三位应答码 + 文本」的 FTP 语法，这里识别具体产品。
+# 产品关键字与版本切分全部是数据，新增一个 FTP 服务端只需加一条规则。
+
+version: 1
+protocol: FTP
+
+rules:
+  - id: ftp.proftpd
+    priority: 100
+    match:
+      source: field
+      field: ftp.text
+      regex: '(?i)\bProFTPD\b(?:\s+(?P<version>\d+(?:\.\d+)+))?'
+    fields:
+      product: 'ProFTPD'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  - id: ftp.vsftpd
+    priority: 100
+    match:
+      source: field
+      field: ftp.text
+      regex: '(?i)\bvsFTPd\b(?:\s+(?P<version>\d+(?:\.\d+)+))?'
+    fields:
+      product: 'vsFTPd'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  - id: ftp.pureftpd
+    priority: 100
+    match:
+      source: field
+      field: ftp.text
+      regex: '(?i)\bPure-FTPd\b(?:\s+(?P<version>\d+(?:\.\d+)+))?'
+    fields:
+      product: 'Pure-FTPd'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.80
+
+  - id: ftp.filezilla
+    priority: 100
+    match:
+      source: field
+      field: ftp.text
+      regex: '(?i)\bFileZilla Server\b(?:\s+(?P<version>\d+(?:\.\d+)+))?'
+    fields:
+      product: 'FileZilla Server'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  # 兜底：只认出「220 就绪」，不知道是哪个实现
+  - id: ftp.generic
+    priority: 10
+    match:
+      source: field
+      field: ftp.code
+      regex: '^220$'
+    fields:
+      product: ''
+      version: ''
+      os_hint: ''
+    confidence:
+      base: 0.60

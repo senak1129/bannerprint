@@ -1,0 +1,14 @@
+# 构建上下文瘦身：只保留编译必需的内容。
+# 排除本机产物、版本库、编辑器数据与文档，避免把几 MB 无关文件塞进 daemon。
+.git
+.gitignore
+.workbuddy
+bin
+*.exe
+*.md
+data
+scripts
+docker-compose.yml
+.env
+.env.example
+Makefile

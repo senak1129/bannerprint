@@ -1,0 +1,41 @@
+# Redis 指纹规则
+#
+# Redis 默认 banner 不含版本号（INFO 才有），因此这里只判定产品，不臆测版本，
+# 置信度统一低于「产品+版本」类规则。
+#
+# 关键字表刻意收窄：只看 RESP 错误码与 PONG/OK，避免把任意以 '-' 开头的
+# 英文行（如 shell 报错 "-bash: ..."）当成 Redis。
+
+version: 1
+protocol: Redis
+
+rules:
+  # 认证/命令错误：最典型的 Redis 未授权探测回显
+  #   -ERR wrong number of arguments for 'get' command
+  #   -NOAUTH Authentication required.
+  - id: redis.error_reply
+    priority: 100
+    match:
+      source: field
+      field: redis.reply
+      regex: '^-(?:ERR|NOAUTH|WRONGTYPE|NOPERM|LOADING|BUSY|MISCONF|EXECABORT)\b'
+    fields:
+      product: 'Redis'
+      version: ''
+      os_hint: ''
+    confidence:
+      base: 0.70
+
+  # 连通性回显：+PONG / +OK —— 证据弱于错误码（其他 RESP 服务也可能如此），降分
+  - id: redis.ping_reply
+    priority: 90
+    match:
+      source: field
+      field: redis.reply
+      regex: '^\+(?:PONG|OK)\b'
+    fields:
+      product: 'Redis'
+      version: ''
+      os_hint: ''
+    confidence:
+      base: 0.65

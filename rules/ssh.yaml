@@ -1,0 +1,42 @@
+# SSH 指纹规则
+#
+# Parser 只提供语法字段：
+#   ssh.software = "OpenSSH_8.9p1"   （空格前的软件标识）
+#   ssh.comment  = "Ubuntu-3"        （空格后的注释，可能缺失）
+#
+# 本文件负责把「软件标识」拆成产品与版本、把「注释」映射成发行版。
+# 拆分规则来自厂商书写习惯，属于知识，因此放在这里而不是 Go 代码里。
+
+version: 1
+protocol: SSH
+
+rules:
+  # 带版本：OpenSSH_8.9p1 → product=OpenSSH, version=8.9p1
+  # 兼容 OpenSSH_for_Windows_8.1、dropbear_2020.81 等写法：
+  # 分隔符取 [_ -]，版本必须以数字开头，正则用惰性匹配找到第一个合法切分点。
+  - id: ssh.product_version
+    priority: 100
+    match:
+      source: field
+      field: ssh.software
+      regex: '^(?P<product>[A-Za-z][A-Za-z0-9._\-]*?)[_\- ](?P<version>\d[0-9A-Za-z.\-]*)$'
+    fields:
+      product: '{{ .product }}'
+      version: '{{ .version }}'
+      os_hint: '{{ osFrom (index . "ssh.comment") }}'
+    confidence:
+      base: 0.95
+
+  # 只有产品名、没有版本（如 "SSH-2.0-dropbear"）：不臆测版本，降置信度。
+  - id: ssh.product_only
+    priority: 10
+    match:
+      source: field
+      field: ssh.software
+      regex: '^(?P<product>[A-Za-z][A-Za-z0-9._\-]*)$'
+    fields:
+      product: '{{ .product }}'
+      version: ''
+      os_hint: '{{ osFrom (index . "ssh.comment") }}'
+    confidence:
+      base: 0.80

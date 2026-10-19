@@ -1,0 +1,89 @@
+# HTTP 指纹规则
+#
+# Parser 提供 http.status_line / http.server / http.powered_by。
+# 产品判定只依赖 Server 头，因为它是服务端自报的最直接证据；
+# X-Powered-By 噪声大（常来自框架或插件），仅保留在字段中，不参与判定。
+#
+# 置信度差异的由来：
+#   nginx / Apache / IIS 的版本号是编译期确定的稳定标识 → 0.90
+#   Jetty 等 JVM 容器的 Server 头由应用依赖决定，可能被改写过   → 0.85
+#   只有状态行、没有 Server 头                                  → 0.60
+
+version: 1
+protocol: HTTP
+
+rules:
+  - id: http.nginx
+    priority: 100
+    match:
+      source: field
+      field: http.server
+      regex: '(?i)^nginx\b(?:/(?P<version>[\d.]+))?(?:\s+\((?P<os>[^)]*)\))?'
+    fields:
+      product: 'nginx'
+      version: '{{ .version }}'
+      os_hint: '{{ osFrom (index . "os") }}'
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  - id: http.apache
+    priority: 100
+    match:
+      source: field
+      field: http.server
+      regex: '(?i)^Apache\b(?:/(?P<version>[\d.]+))?(?:\s+\((?P<os>[^)]*)\))?'
+    fields:
+      product: 'Apache'
+      version: '{{ .version }}'
+      os_hint: '{{ osFrom (index . "os") }}'
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  - id: http.jetty
+    priority: 100
+    match:
+      source: field
+      field: http.server
+      regex: '(?i)^Jetty\b(?:/(?P<version>[\d.]+))?'
+    fields:
+      product: 'Jetty'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.85
+      if_empty:
+        version: 0.75
+
+  - id: http.iis
+    priority: 100
+    match:
+      source: field
+      field: http.server
+      regex: '(?i)^Microsoft-IIS\b(?:/(?P<version>[\d.]+))?'
+    fields:
+      product: 'Microsoft-IIS'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.90
+      if_empty:
+        version: 0.80
+
+  # 兜底：只认出这是 HTTP，产品未知。
+  # 置信度 0.60，低于任何具体产品规则，因此永远不会盖掉上面的结果。
+  - id: http.generic
+    priority: 10
+    match:
+      source: field
+      field: http.status_line
+      regex: '(?i)^HTTP/\d(?:\.\d)?\s+\d{3}'
+    fields:
+      product: ''
+      version: ''
+      os_hint: ''
+    confidence:
+      base: 0.60

@@ -1,0 +1,24 @@
+# MySQL 指纹规则
+#
+# 协议判定（握手包结构、0x0A 版本字节）属于语法，在 internal/parsers/mysql.go；
+# 这里只声明「命中后产品叫什么、置信度多少」。
+#
+# MySQL 的 banner 里 product 与 version 同名并非笔误：
+# 版本号本身就是产品标识，不存在独立的厂商名可抽取。
+
+version: 1
+protocol: MySQL
+
+rules:
+  - id: mysql.handshake
+    priority: 100
+    match:
+      source: field
+      field: mysql.server_version
+      regex: '^(?P<version>\d+\.\d+(?:\.\d+)*)'
+    fields:
+      product: 'MySQL'
+      version: '{{ .version }}'
+      os_hint: ''
+    confidence:
+      base: 0.90
