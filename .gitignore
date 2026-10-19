@@ -1,0 +1,15 @@
+# 本机构建产物
+bin/
+*.exe
+*.test
+
+# 本地环境与输出
+.env
+result*.json
+coverage.out
+
+# 工具/会话数据
+.workbuddy/
+.idea/
+.vscode/
+.DS_Store
