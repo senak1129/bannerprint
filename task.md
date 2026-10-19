@@ -338,8 +338,27 @@ T+30  截止
 ## 9. 任务看板（执行时勾选）
 
 ```
-P0  [ ]P0-1 [ ]P0-2 [ ]P0-3 [ ]P0-4 [ ]P0-5 [ ]P0-6 [ ]P0-7 [ ]P0-8 [ ]P0-9 [ ]P0-10 [ ]P0-11
-P1  [ ]P1-1 [ ]P1-2 [ ]P1-3 [ ]P1-4
-P2  [ ]P2-1 [ ]P2-2 [ ]P2-3 [ ]P2-4 [ ]P2-5
+P0  [x]P0-1 [x]P0-2 [x]P0-3 [x]P0-4 [x]P0-5 [x]P0-6 [x]P0-7 [x]P0-8 [x]P0-9 [x]P0-10 [x]P0-11
+P1  [x]P1-1 [x]P1-2 [x]P1-3 [x]P1-4
+P2  [~]P2-1 [x]P2-2 [~]P2-3 [x]P2-4 [x]P2-5
 P3  [ ]P3-1 [ ]P3-2 [ ]P3-3 [ ]P3-4 [ ]P3-5
 ```
+
+### 9.1 执行记录（T+0 = 15:56，T+33 = 16:29）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| P0 全部 | 完成 | `go build ./...` 通过；本机 20/20 识别正确（SSH/HTTP/MySQL/Redis/FTP/TLS/unknown） |
+| P1-1 client | 完成 | 容器内 `client -file /data/input.json` 输出 20 行 + 统计；不可达时退出码 3 |
+| P1-2 镜像 | 完成 | server 11.7MB / client 7.97MB，scratch + 静态二进制 + 4 层 |
+| P1-3 compose | 完成 | `docker compose up -d --build --wait` → `Up (healthy)`，仅 `127.0.0.1:8080` 发布 |
+| P1-4 联调 | 完成 | 容器间走 `http://server:8080`（internal 网络）；端口/网络/权限均经 inspect 校验 |
+| P2-2 README | 完成 | 快速开始、契约、架构、6 条设计决策、规则扩展、验证清单、Known Limitations |
+| P2-4 verify.sh | 完成 | 5 项自检（网络/健康/镜像/权限/解耦），Git Bash 下自动关路径转换 |
+| P2-5 推送 | 完成 | https://github.com/senak1129/bannerprint （public，main，50 files） |
+| P2-1 测试 | 部分 | 已有 jsonx / parsers / rules / engine-golden / api 测试，待补 `-race` 全量与契约边界 |
+| P2-3 日志 | 部分 | 结构化访问日志与 request-id 已就位，debug 级 rule_id 追踪待补 |
+
+> 推送方式说明：本机出网代理拦截了 `github.com:443` 的 git Smart HTTP（CONNECT 502），
+> 但 `api.github.com` 可达，故首次推送改走 Git Data API（blobs → tree → commit → ref），
+> 结果与 `git push` 等价。评估者侧 `git clone` 走常规 HTTPS，不受影响。

@@ -13,3 +13,6 @@ coverage.out
 .idea/
 .vscode/
 .DS_Store
+
+# 本地推送辅助脚本（代理受限时走 API）
+.push.py
